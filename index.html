@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Elphara et les kanjis</title>
+  <meta name="description" content="Apprendre les kanjis avec Elphara" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="theme-color" content="#0f172a" />
+  <!-- Firebase CDN -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    :root { --fg:#e2e8f0; --accent:#38bdf8; --glass: rgba(0,0,0,.55); --ok:#22c55e; --bad:#f87171; --glow:#60a5fa; }
+    *{ box-sizing: border-box; }
+    html,body{ height:100%; margin:0; }
+    body{ display:flex; align-items:center; justify-content:center; padding:16px; background:#0f172a; color:var(--fg);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,'Noto Sans',Helvetica,Arial,sans-serif; }
+    main{ width:min(900px,100%); padding:1.75rem 2rem; border:1px solid rgba(255,255,255,.12); border-radius:24px;
+      background:var(--glass); backdrop-filter:blur(6px); box-shadow:0 10px 35px rgba(0,0,0,.35); }
+    h1{ margin:0 0 .5rem 0; font-size:clamp(1.8rem,5.2vw,3rem); letter-spacing:.5px; }
+    .nav{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .sub{ margin:.25rem 0 1rem 0; display:inline-block; font-size:.9rem; border:1px solid rgba(255,255,255,.2); padding:.3rem .65rem; border-radius:999px; }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .pill{ border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:.35rem .7rem; font-size:.85rem; }
+    .card{ margin-top:1rem; padding:1rem; border:1px solid rgba(255,255,255,.15); border-radius:18px; background:rgba(255,255,255,.04); }
+    .kanji-big{ font-size:3.2rem; text-align:center; margin:.25rem 0 1rem 0; }
+    input[type="text"],input[type="email"],input[type="password"]{ width:100%; padding:.9rem 1rem; border-radius:12px; border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.35); color:var(--fg); font-size:1.05rem; }
+    button{ cursor:pointer; border-radius:12px; border:1px solid rgba(255,255,255,.25); background:transparent; color:var(--fg); padding:.6rem .9rem; }
+    button.primary{ background:var(--accent); color:#0b1220; border-color:transparent; }
+    .ok{ color:var(--ok); } .bad{ color:var(--bad); } .badtext{ color:var(--bad); font-weight:600; }
+    .xpwrap{ display:grid; grid-template-columns: 120px 1fr; gap:14px; align-items:center; margin-top:1rem; }
+    .avatar{ width:120px; height:120px; border-radius:20px; display:flex; align-items:center; justify-content:center;
+      background: radial-gradient(60% 60% at 50% 40%, rgba(96,165,250,.35), rgba(0,0,0,.25));
+      border:1px solid rgba(255,255,255,.15); box-shadow:0 0 0 0 rgba(96,165,250,.0); transition: box-shadow .4s ease; font-size:56px; }
+    .avatar.glow{ box-shadow:0 0 25px 6px rgba(96,165,250,.35); }
+    /* Auth modal */
+    .auth-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:50; }
+    .auth-card{ width:min(420px, 92%); background:rgba(2,6,23,.9); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px; }
+    .auth-card h3{ margin:0 0 8px 0; }
+    .hint{ font-size:.85rem; opacity:.9; }
+    footer{ position:fixed; bottom:12px; left:50%; transform:translateX(-50%); font-size:.8rem; color:#94a3b8; text-shadow:0 1px 3px rgba(0,0,0,.7); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="nav">
+      <h1>Elphara et les kanjis</h1>
+      <div class="row">
+        <button id="musicBtn" title="Activer/Désactiver la musique">Musique: off</button>
+        <button id="authBtn" title="Créer un compte ou se connecter">Se connecter</button>
+      </div>
+    </div>
+
+    <section id="menu">
+      <div class="sub">Menu principal</div>
+      <div class="card" style="text-align:center;">
+        <p style="margin:.5rem 0 1rem 0; opacity:.9">Entraîne-toi sur les kanjis du JLPT N5. Points d'XP, avatar évolutif, sons.</p>
+        <div class="row" style="justify-content:center;">
+          <button id="go-quiz" class="primary" style="font-size:1.05rem;">Entraînement kanji ▶</button>
+          <button id="go-profile" style="font-size:1.05rem;">Mon avatar et niveau</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="profile" style="display:none;">
+      <div class="sub">Profil • Sauvegarde locale + cloud</div>
+      <div class="xpwrap">
+        <div id="pAvatar" class="avatar" title="Avatar">🌱</div>
+        <div class="xpbar">
+          <div class="row" style="justify-content:space-between; font-size:.9rem; opacity:.9; margin-bottom:.35rem;">
+            <span>Niveau <strong id="pLevel">1</strong></span>
+            <span><strong id="pXP">0</strong>/<strong id="pXPMAX">100</strong> XP</span>
+          </div>
+          <div class="pill" style="width:100%; padding:0;">
+            <div class="kanji-big" style="font-size:0; height:12px; border-radius:999px; background:rgba(255,255,255,.15); overflow:hidden;">
+              <div id="pFill" style="height:12px; width:0%; background:linear-gradient(90deg, var(--accent), #6ee7b7);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row" style="gap:24px;">
+          <div>Réponses totales: <strong id="pAns">0</strong></div>
+          <div>Traductions justes: <strong id="pOkTr">0</strong></div>
+          <div>Lectures justes: <strong id="pOkRead">0</strong></div>
+          <div>Erreurs: <strong id="pWrong">0</strong></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button id="resetProgress">Réinitialiser progression</button>
+          <button id="back2">Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="quiz" style="display:none;">
+      <div class="sub">JLPT N5 • Traduction obligatoire • Bonus si tu donnes la lecture (かな ou romaji)</div>
+      <div class="row">
+        <span class="pill">Question <strong id="qnum">0</strong>/<strong id="qtotal">0</strong></span>
+        <button id="start" class="primary">Démarrer</button>
+        <button id="validate">Valider</button>
+        <button id="next" style="display:none">Prochain kanji</button>
+        <button id="skip">Passer</button>
+        <button id="reset">Réinitialiser</button>
+        <button id="back">Menu</button>
+      </div>
+      <div class="xpwrap">
+        <div id="avatar" class="avatar" title="Ton avatar">🌱</div>
+        <div class="xpbar">
+          <div class="row" style="justify-content:space-between; font-size:.9rem; opacity:.9; margin-bottom:.35rem;">
+            <span>Niveau <strong id="level">1</strong></span>
+            <span><strong id="xp">0</strong>/<strong id="xpmax">100</strong> XP</span>
+          </div>
+          <div class="pill" style="width:100%; padding:0;">
+            <div class="kanji-big" style="font-size:0; height:12px; border-radius:999px; background:rgba(255,255,255,.15); overflow:hidden;">
+              <div id="fill" style="height:12px; width:0%; background:linear-gradient(90deg, var(--accent), #6ee7b7);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="prompt" class="kanji-big"></div>
+        <input id="answer" type="text" placeholder="Traduction en français" autocomplete="off" />
+        <input id="reading" type="text" placeholder="Lecture (かな ou romaji, optionnel)" autocomplete="off" style="margin-top:.6rem" />
+        <div id="feedback" style="margin-top:.6rem;min-height:2.2rem;"></div>
+      </div>
+    </section>
+
+    <div id="authModal" class="auth-backdrop">
+      <div class="auth-card">
+        <h3>Compte</h3>
+        <p class="hint">Identifiant = email. Mot de passe ≥ 6 caractères.</p>
+        <input id="authEmail" type="email" placeholder="Email" autocomplete="username" style="margin-top:.5rem" />
+        <input id="authPwd" type="password" placeholder="Mot de passe" autocomplete="current-password" style="margin-top:.5rem" />
+        <div class="row" style="margin-top:.8rem;">
+          <button id="btnSignUp">Créer un compte</button>
+          <button id="btnSignIn" class="primary">Se connecter</button>
+          <button id="btnSignOut" style="display:none">Se déconnecter</button>
+          <button id="btnClose">Fermer</button>
+        </div>
+        <div id="authState" class="hint" style="margin-top:.5rem;"></div>
+      </div>
+    </div>
+
+    <div id="yt-holder" style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;"><div id="yt"></div></div>
+  </main>
+
+  <footer>© <span id="year"></span> Elphara</footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Routing
+    const viewMenu = document.getElementById('menu');
+    const viewQuiz = document.getElementById('quiz');
+    const viewProfile = document.getElementById('profile');
+    document.getElementById('go-quiz').addEventListener('click', ()=>{ showQuiz(); });
+    document.getElementById('go-profile').addEventListener('click', ()=>{ showProfile(); });
+    document.getElementById('back').addEventListener('click', ()=>{ showMenu(); });
+    document.getElementById('back2').addEventListener('click', ()=>{ showMenu(); });
+    function showQuiz(){ viewMenu.style.display='none'; viewProfile.style.display='none'; viewQuiz.style.display='block'; }
+    function showProfile(){ viewMenu.style.display='none'; viewQuiz.style.display='none'; viewProfile.style.display='block'; refreshProfile(); }
+    function showMenu(){ viewQuiz.style.display='none'; viewProfile.style.display='none'; viewMenu.style.display='block'; }
+
+    // Data
+    const N5 = [
+      {k:'一', m:'un', on:['ichi','itsu'], kun:['hito','hitotsu']},
+      {k:'二', m:'deux', on:['ni'], kun:['futa','futatsu']},
+      {k:'三', m:'trois', on:['san'], kun:['mi','mittsu']},
+      {k:'四', m:'quatre', on:['shi'], kun:['yon','yo','yottsu']},
+      {k:'五', m:'cinq', on:['go'], kun:['itsu','itsutsu']},
+      {k:'六', m:'six', on:['roku'], kun:['mu','muttsu']},
+      {k:'七', m:'sept', on:['shichi'], kun:['nana','nanatsu']},
+      {k:'八', m:'huit', on:['hachi'], kun:['ya','yattsu']},
+      {k:'九', m:'neuf', on:['kyuu','ku'], kun:['kokono','kokonotsu']},
+      {k:'十', m:'dix', on:['juu'], kun:['tou']},
+      {k:'百', m:'cent', on:['hyaku'], kun:[]},
+      {k:'千', m:'mille', on:['sen'], kun:[]},
+      {k:'万', m:'dix-mille', on:['man','ban'], kun:[]},
+      {k:'日', m:'jour; soleil', on:['nichi','jitsu'], kun:['hi','ka']},
+      {k:'月', m:'mois; lune', on:['getsu','gatsu'], kun:['tsuki']},
+      {k:'火', m:'feu', on:['ka'], kun:['hi']},
+      {k:'水', m:'eau', on:['sui'], kun:['mizu']},
+      {k:'木', m:'arbre; bois', on:['moku','boku'], kun:['ki','ko']},
+      {k:'金', m:'or; métal; argent', on:['kin','kon'], kun:['kane','kana']},
+      {k:'土', m:'terre; sol', on:['do','to'], kun:['tsuchi']},
+      {k:'山', m:'montagne', on:['san'], kun:['yama']},
+      {k:'川', m:'rivière', on:['sen'], kun:['kawa']},
+      {k:'田', m:'rizière', on:['den'], kun:['ta']},
+      {k:'本', m:'livre; origine', on:['hon'], kun:['moto']},
+      {k:'人', m:'personne', on:['jin','nin'], kun:['hito']},
+      {k:'子', m:'enfant', on:['shi','su'], kun:['ko']},
+      {k:'女', m:'femme', on:['jo'], kun:['onna']},
+      {k:'男', m:'homme', on:['dan','nan'], kun:['otoko']},
+      {k:'名', m:'nom', on:['mei','myou'], kun:['na']},
+      {k:'年', m:'année', on:['nen'], kun:['toshi']},
+      {k:'時', m:'heure; temps', on:['ji'], kun:['toki']},
+      {k:'分', m:'minute; part', on:['bun','fun','bu'], kun:['wakeru','wa']},
+      {k:'半', m:'moitié; demi', on:['han'], kun:[]},
+      {k:'前', m:'avant', on:['zen'], kun:['mae']},
+      {k:'後', m:'après; derrière', on:['go','kou'], kun:['ato','ushiro']},
+      {k:'間', m:'entre; intervalle', on:['kan'], kun:['aida','ma']},
+      {k:'上', m:'au-dessus; monter', on:['jou'], kun:['ue','agaru']},
+      {k:'下', m:'au-dessous; descendre', on:['ka','ge'], kun:['shita','sagaru']},
+      {k:'中', m:'milieu; dedans', on:['chuu'], kun:['naka']},
+      {k:'大', m:'grand', on:['dai','tai'], kun:['ookii']},
+      {k:'小', m:'petit', on:['shou'], kun:['chiisai']},
+      {k:'右', m:'droite', on:['u','yuu'], kun:['migi']},
+      {k:'左', m:'gauche', on:['sa'], kun:['hidari']},
+      {k:'先', m:'avant; précédent', on:['sen'], kun:['saki']},
+      {k:'生', m:'vie; naître', on:['sei','shou'], kun:['ikiru','umareru','nama']},
+      {k:'学', m:'études; apprendre', on:['gaku'], kun:['manabu']},
+      {k:'行', m:'aller', on:['kou','gyou'], kun:['iku']},
+      {k:'来', m:'venir', on:['rai'], kun:['kuru']},
+      {k:'帰', m:'rentrer', on:['ki'], kun:['kaeru']},
+      {k:'入', m:'entrer', on:['nyuu'], kun:['hairu','iru']},
+      {k:'出', m:'sortir', on:['shutsu'], kun:['deru','dasu']},
+      {k:'見', m:'voir', on:['ken'], kun:['miru']},
+      {k:'聞', m:'entendre; écouter', on:['bun','mon'], kun:['kiku']},
+      {k:'言', m:'dire; parole', on:['gen','gon'], kun:['iu']},
+      {k:'話', m:'parler; histoire', on:['wa'], kun:['hanasu']},
+      {k:'読', m:'lire', on:['doku'], kun:['yomu']},
+      {k:'書', m:'écrire', on:['sho'], kun:['kaku']},
+      {k:'食', m:'manger; nourriture', on:['shoku'], kun:['taberu']},
+      {k:'飲', m:'boire', on:['in'], kun:['nomu']},
+      {k:'買', m:'acheter', on:['bai'], kun:['kau']},
+      {k:'売', m:'vendre', on:['bai'], kun:['uru']},
+      {k:'休', m:'se reposer', on:['kyuu'], kun:['yasumu']},
+      {k:'会', m:'rencontrer; association', on:['kai'], kun:['au']},
+      {k:'国', m:'pays', on:['koku'], kun:['kuni']},
+      {k:'語', m:'langue; mot', on:['go'], kun:['kataru']},
+      {k:'電', m:'électricité', on:['den'], kun:[]},
+      {k:'車', m:'voiture', on:['sha'], kun:['kuruma']},
+      {k:'駅', m:'gare', on:['eki'], kun:[]},
+      {k:'道', m:'route; chemin', on:['dou'], kun:['michi']},
+      {k:'空', m:'ciel; vide', on:['kuu'], kun:['sora','kara']},
+      {k:'天', m:'ciel', on:['ten'], kun:['ama','ame']},
+      {k:'雨', m:'pluie', on:['u'], kun:['ame']},
+      {k:'白', m:'blanc', on:['haku'], kun:['shiro']},
+      {k:'黒', m:'noir', on:['koku'], kun:['kuro']},
+      {k:'赤', m:'rouge', on:['seki'], kun:['aka']},
+      {k:'青', m:'bleu', on:['sei','shou'], kun:['ao']},
+      {k:'花', m:'fleur', on:['ka'], kun:['hana']},
+      {k:'草', m:'herbe', on:['sou'], kun:['kusa']},
+      {k:'犬', m:'chien', on:['ken'], kun:['inu']},
+      {k:'魚', m:'poisson', on:['gyo'], kun:['sakana','uo']},
+      {k:'鳥', m:'oiseau', on:['chou'], kun:['tori']},
+      {k:'毎', m:'chaque', on:['mai'], kun:[]},
+      {k:'週', m:'semaine', on:['shuu'], kun:[]},
+      {k:'午', m:'midi', on:['go'], kun:[]},
+      {k:'円', m:'yen; cercle', on:['en'], kun:['maru']}
+    ];
+
+    const FR_SYNS = {
+      '上': ['au dessus','dessus','haut','monter'],
+      '下': ['en dessous','dessous','bas','descendre'],
+      '大': ['grand','gros'],
+      '小': ['petit','petite','petits','petites'],
+      '目': ['oeil','yeux'],
+      '手': ['main','mains'],
+      '足': ['pied','pieds','jambe','jambes']
+    };
+
+    const DATA = N5.filter(x => x.k.length === 1);
+
+    let order = []; let idx = 0; let locked = false;
+    let level = 1; let xp = 0; let xpMax = 100;
+    let stats = { answered:0, okTr:0, okRead:0, wrong:0 };
+
+    // Audio
+    let AC = null; let master = null;
+    function initAudio(){ if(!AC){ const Ctx = window.AudioContext || window.webkitAudioContext; if(Ctx) AC = new Ctx(); }
+      if(AC && !master){ master = AC.createGain(); master.gain.value = 0.9; master.connect(AC.destination); } }
+    function playGood(){ if(!AC) return; const ctx=AC, now=ctx.currentTime, base=523.25, semis=[0,4,7,12,16];
+      semis.forEach((st,i)=>{ const f=base*Math.pow(2,st/12); const o=ctx.createOscillator(); o.type='triangle';
+        const g=ctx.createGain(); g.gain.setValueAtTime(0.0001, now+i*0.06);
+        g.gain.exponentialRampToValueAtTime(0.08, now+i*0.06+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now+i*0.06+0.30);
+        const d=ctx.createDelay(); d.delayTime.value=0.18; const fb=ctx.createGain(); fb.gain.value=0.25; d.connect(fb).connect(d);
+        o.connect(g).connect(master); o.connect(g).connect(d).connect(master);
+        o.frequency.value=f; o.start(now+i*0.06); o.stop(now+i*0.06+0.32); }); }
+    function playBad(){ if(!AC) return; const ctx=AC, now=ctx.currentTime, freqs=[392.00,330.00,261.63];
+      freqs.forEach((f,i)=>{ const o=ctx.createOscillator(); o.type='sawtooth'; const g=ctx.createGain(); g.gain.setValueAtTime(0.0001, now+i*0.08);
+        g.gain.exponentialRampToValueAtTime(0.05, now+i*0.08+0.02); g.gain.exponentialRampToValueAtTime(0.0001, now+i*0.08+0.18);
+        o.frequency.value=f; o.connect(g).connect(master); o.start(now+i*0.08); o.stop(now+i*0.08+0.2); }); }
+
+    // YouTube music
+    let musicOn=false, YTPlayer=null;
+    (function(){ const tag=document.createElement('script'); tag.src='https://www.youtube.com/iframe_api'; document.head.appendChild(tag); })();
+    window.onYouTubeIframeAPIReady=function(){ YTPlayer=new YT.Player('yt',{width:'0',height:'0',videoId:'jlXopoG-ZrA',
+      playerVars:{autoplay:0,controls:0,rel:0,modestbranding:1,loop:1,playlist:'jlXopoG-ZrA'}}); };
+    function startMusic(){ if(!YTPlayer) return; try{ YTPlayer.unMute(); YTPlayer.setVolume(8); YTPlayer.playVideo(); }catch(e){} musicOn=true; updateMusicBtn(); }
+    function stopMusic(){ if(YTPlayer){ try{ YTPlayer.pauseVideo(); }catch(e){} } musicOn=false; updateMusicBtn(); }
+    function toggleMusic(){ if(!musicOn) startMusic(); else stopMusic(); }
+    const musicBtn=document.getElementById('musicBtn'); function updateMusicBtn(){ musicBtn.textContent = musicOn ? 'Musique: on' : 'Musique: off'; }
+    musicBtn.addEventListener('click', ()=>{ initAudio(); toggleMusic(); });
+
+    // XP + avatar
+    const elQNum=document.getElementById('qnum'), elQTot=document.getElementById('qtotal'), elPrompt=document.getElementById('prompt'),
+          elAnswer=document.getElementById('answer'), elReading=document.getElementById('reading'), elFeedback=document.getElementById('feedback'),
+          elLevel=document.getElementById('level'), elXP=document.getElementById('xp'), elXPMAX=document.getElementById('xpmax'),
+          elFill=document.getElementById('fill'), elNext=document.getElementById('next'), elAvatar=document.getElementById('avatar');
+    elQTot.textContent = DATA.length;
+    function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+    function avatarStage(){ const power = level + (xp/xpMax); if(power < 2) return {emoji:'🌱', glow:false}; if(power < 3.5) return {emoji:'🎋', glow:false}; if(power < 5) return {emoji:'🏯', glow:true}; return {emoji:'🐉', glow:true}; }
+    function updateAvatar(){ const a=avatarStage(); elAvatar.textContent=a.emoji; if(a.glow) elAvatar.classList.add('glow'); else elAvatar.classList.remove('glow'); }
+    function updateXPBar(){ elLevel.textContent=level; elXP.textContent=xp; elXPMAX.textContent=xpMax; const pct=Math.max(0, Math.min(100, Math.round((xp/xpMax)*100))); elFill.style.width=pct+'%'; updateAvatar(); }
+
+    // Local save + timestamp
+    const STORAGE_KEY='elphara.progress.v2';
+    function nowTs(){ return Date.now(); }
+    function saveLocal(){ const payload={level,xp,xpMax,stats,updatedAt:nowTs()}; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); }catch{} return payload; }
+    function loadLocal(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return null; return JSON.parse(raw);}catch{ return null; } }
+    function applyProgress(p){ if(!p) return; if(typeof p.level==='number') level=p.level; if(typeof p.xp==='number') xp=p.xp; if(typeof p.xpMax==='number') xpMax=p.xpMax; if(p.stats) stats={...stats, ...p.stats}; updateXPBar(); }
+
+    function gainXP(delta){ xp=Math.max(0, xp+delta); while(xp>=xpMax){ xp-=xpMax; level+=1; xpMax=Math.round(100+(level-1)*25);} updateXPBar();
+      const saved=saveLocal(); saveCloudIfAny(saved); if(viewProfile.style.display==='block') refreshProfile(); }
+
+    function newRound(){ order = shuffle([...Array(DATA.length).keys()]); idx=0; nextQuestion(); }
+    function nextQuestion(){ if(idx>=order.length){ order=shuffle(order); idx=0; } const item=DATA[order[idx]];
+      elPrompt.textContent=item.k; elAnswer.value=''; elReading.value=''; elFeedback.textContent=''; elFeedback.className='';
+      elQNum.textContent=idx+1; elAnswer.focus(); elNext.style.display='none'; locked=false; }
+
+    // FR matching
+    const STOP = new Set(['le','la','les','l','un','une','des','du','de','d','au','aux']);
+    function normalizeFr(s){ if(!s) return ''; s=s.toLowerCase(); s=s.normalize('NFD').replace(/\p{Diacritic}/gu,''); s=s.replace(/[’']/g,' ');
+      s=s.replace(/[^\p{L}\s-]/gu,' '); s=s.replace(/\s+/g,' ').trim(); return s; }
+    function tokensFr(s){ s=normalizeFr(s); return s.split(/[\s-]+/).filter(w=>w && !STOP.has(w)); }
+    function variants(w){ const v=new Set([w]); if(w.endsWith('es')) v.add(w.slice(0,-2)); if(w.endsWith('s')) v.add(w.slice(0,-1)); if(w.endsWith('e')) v.add(w.slice(0,-1)); return v; }
+    function matchFr(answer, item){ if(!answer) return false; const opts=(item.m.split(';').concat(FR_SYNS[item.k]||[])).map(normalizeFr); const ans=normalizeFr(answer);
+      if(opts.includes(ans)) return true; const ansTokens=tokensFr(ans); for(const opt of opts){ const optTokens=tokensFr(opt); for(const a of ansTokens){ for(const v of variants(a)){ if(optTokens.includes(v)) return true; } } } return false; }
+
+    // Reading matching
+    function normalizeJa(s){ return (s||'').toLowerCase().replace(/\s|-/g,''); }
+
+    function check(){ if(locked) return; initAudio(); const item=DATA[order[idx]];
+      const okFr = matchFr(elAnswer.value, item);
+      const valJa = normalizeJa(elReading.value);
+      const readings = [...(item.on||[]),...(item.kun||[])].map(normalizeJa);
+      const okJa = valJa && readings.some(r => valJa === r);
+      if(okFr){
+        if(okJa){ elFeedback.innerHTML = `Correct ✓ Traduction: <strong>${item.m}</strong> | Lecture: <strong>${[...item.on,...item.kun].join(', ')}</strong>`; elFeedback.className='ok'; stats.answered++; stats.okTr++; stats.okRead++; gainXP(25); playGood(); }
+        else { elFeedback.innerHTML = `Correct ✓ Traduction: <strong>${item.m}</strong> | Lecture attendue: <strong class="badtext">${[...item.on,...item.kun].join(', ')}</strong>`; elFeedback.className='ok'; stats.answered++; stats.okTr++; gainXP(10); playGood(); }
+      } else {
+        elFeedback.innerHTML = `Incorrect ✗ Traduction attendue: <strong class="badtext">${item.m}</strong> | Lectures: <strong>${[...item.on,...item.kun].join(', ')}</strong>`; elFeedback.className='bad'; stats.answered++; stats.wrong++; gainXP(-10); playBad();
+      }
+      idx+=1; elNext.style.display='inline-block'; locked=true; const saved=saveLocal(); saveCloudIfAny(saved); if(viewProfile.style.display==='block') refreshProfile();
+    }
+
+    // Controls
+    document.getElementById('start').addEventListener('click', ()=>{ initAudio(); if(order.length===0) newRound(); else nextQuestion(); });
+    document.getElementById('validate').addEventListener('click', ()=>{ check(); });
+    document.getElementById('next').addEventListener('click', ()=>{ nextQuestion(); });
+    document.getElementById('skip').addEventListener('click', ()=>{ idx=(idx+1); nextQuestion(); });
+    document.getElementById('reset').addEventListener('click', ()=>{ level=1; xp=0; xpMax=100; stats={answered:0, okTr:0, okRead:0, wrong:0}; updateXPBar(); const saved=saveLocal(); saveCloudIfAny(saved); newRound(); });
+    document.getElementById('answer').addEventListener('keydown', (e)=>{ if(e.key==='Enter') check(); });
+    document.getElementById('reading').addEventListener('keydown', (e)=>{ if(e.key==='Enter') check(); });
+
+    // Profile view
+    function refreshProfile(){
+      document.getElementById('pLevel').textContent = level;
+      document.getElementById('pXP').textContent = xp;
+      document.getElementById('pXPMAX').textContent = xpMax;
+      const pct = Math.max(0, Math.min(100, Math.round((xp / xpMax) * 100)));
+      document.getElementById('pFill').style.width = pct + '%';
+      document.getElementById('pAvatar').textContent = avatarStage().emoji;
+      document.getElementById('pAns').textContent = stats.answered;
+      document.getElementById('pOkTr').textContent = stats.okTr;
+      document.getElementById('pOkRead').textContent = stats.okRead;
+      document.getElementById('pWrong').textContent = stats.wrong;
+    }
+
+    // Auth UI
+    const authBtn = document.getElementById('authBtn');
+    const authModal = document.getElementById('authModal');
+    const authEmail = document.getElementById('authEmail');
+    const authPwd = document.getElementById('authPwd');
+    const btnSignUp = document.getElementById('btnSignUp');
+    const btnSignIn = document.getElementById('btnSignIn');
+    const btnSignOut = document.getElementById('btnSignOut');
+    const btnClose = document.getElementById('btnClose');
+    const authState = document.getElementById('authState');
+    function openAuth(){ authModal.style.display='flex'; authEmail.focus(); }
+    function closeAuth(){ authModal.style.display='none'; }
+    authBtn.addEventListener('click', openAuth);
+    btnClose.addEventListener('click', closeAuth);
+
+    // Firebase config à remplir
+    const firebaseConfig = {
+      apiKey: "A_REMPLIR",
+      authDomain: "A_REMPLIR.firebaseapp.com",
+      projectId: "A_REMPLIR",
+    };
+    let auth=null, db=null, user=null;
+    function hasConfig(){ return firebaseConfig && firebaseConfig.apiKey && !/A_REMPLIR/.test(firebaseConfig.apiKey); }
+    function initFirebase(){
+      try{
+        if(!hasConfig()) { authState.textContent = "Cloud désactivé. Ajoute la config Firebase."; return; }
+        if(!firebase.apps.length){ firebase.initializeApp(firebaseConfig); }
+        auth = firebase.auth();
+        db = firebase.firestore();
+        auth.onAuthStateChanged(async (u)=>{ user=u||null; updateAuthUI(); if(user){ await mergeCloudLocal(); } });
+      }catch(e){ authState.textContent = "Erreur Firebase. Vérifie la config."; }
+    }
+    function updateAuthUI(){
+      if(user){
+        authBtn.textContent = 'Compte';
+        authState.textContent = `Connecté: ${user.email}`;
+        btnSignOut.style.display = 'inline-block'; btnSignIn.style.display = 'none'; btnSignUp.style.display = 'none';
+      } else {
+        authBtn.textContent = 'Se connecter';
+        authState.textContent = 'Non connecté';
+        btnSignOut.style.display = 'none'; btnSignIn.style.display = 'inline-block'; btnSignUp.style.display = 'inline-block';
+      }
+    }
+    async function signUp(){ try{ await auth.createUserWithEmailAndPassword(authEmail.value, authPwd.value); }catch(e){ authState.textContent = e.message; } }
+    async function signIn(){ try{ await auth.signInWithEmailAndPassword(authEmail.value, authPwd.value); closeAuth(); }catch(e){ authState.textContent = e.message; } }
+    async function signOut(){ try{ await auth.signOut(); }catch(e){ authState.textContent = e.message; } }
+    btnSignUp.addEventListener('click', signUp);
+    btnSignIn.addEventListener('click', signIn);
+    btnSignOut.addEventListener('click', signOut);
+
+    // Cloud sync
+    function userDoc(){ return db.collection('users').doc(user.uid); }
+    async function loadCloud(){ const snap = await userDoc().get(); return snap.exists ? snap.data() : null; }
+    async function saveCloud(payload){ if(!user) return; payload = payload || saveLocal(); payload.email = user.email; payload.updatedAt = nowTs(); await userDoc().set(payload, { merge:true }); }
+    async function mergeCloudLocal(){
+      const local = loadLocal(); const cloud = await loadCloud();
+      if(cloud && (!local || (cloud.updatedAt||0) >= (local.updatedAt||0))){ applyProgress(cloud); saveLocal(); }
+      else if(local){ applyProgress(local); await saveCloud(local); }
+      else { await saveCloud(saveLocal()); }
+      refreshProfile();
+    }
+    function saveCloudIfAny(payload){ if(user && navigator.onLine){ saveCloud(payload).catch(()=>{}); } }
+
+    // PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(console.error); });
+    }
+
+    // Boot
+    const bootLocal = loadLocal(); if(bootLocal) applyProgress(bootLocal); else saveLocal();
+    updateXPBar(); showMenu();
+    initFirebase();
+  </script>
+</body>
+</html>
