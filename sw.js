@@ -1,5 +1,5 @@
 /* Elphara PWA Service Worker */
-const CACHE = 'elphara-v1';
+const CACHE = 'elphara-v2';
 const ASSETS = ['./','./index.html','./offline.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
