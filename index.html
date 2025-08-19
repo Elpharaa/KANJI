@@ -388,54 +388,7 @@
     authBtn.addEventListener('click', openAuth);
     btnClose.addEventListener('click', closeAuth);
 
-    // Firebase config à remplir
-    const firebaseConfig = {
-      apiKey: "A_REMPLIR",
-      authDomain: "A_REMPLIR.firebaseapp.com",
-      projectId: "A_REMPLIR",
-    };
-    let auth=null, db=null, user=null;
-    function hasConfig(){ return firebaseConfig && firebaseConfig.apiKey && !/A_REMPLIR/.test(firebaseConfig.apiKey); }
-    function initFirebase(){
-      try{
-        if(!hasConfig()) { authState.textContent = "Cloud désactivé. Ajoute la config Firebase."; return; }
-        if(!firebase.apps.length){ firebase.initializeApp(firebaseConfig); }
-        auth = firebase.auth();
-        db = firebase.firestore();
-        auth.onAuthStateChanged(async (u)=>{ user=u||null; updateAuthUI(); if(user){ await mergeCloudLocal(); } });
-      }catch(e){ authState.textContent = "Erreur Firebase. Vérifie la config."; }
-    }
-    function updateAuthUI(){
-      if(user){
-        authBtn.textContent = 'Compte';
-        authState.textContent = `Connecté: ${user.email}`;
-        btnSignOut.style.display = 'inline-block'; btnSignIn.style.display = 'none'; btnSignUp.style.display = 'none';
-      } else {
-        authBtn.textContent = 'Se connecter';
-        authState.textContent = 'Non connecté';
-        btnSignOut.style.display = 'none'; btnSignIn.style.display = 'inline-block'; btnSignUp.style.display = 'inline-block';
-      }
-    }
-    async function signUp(){ try{ await auth.createUserWithEmailAndPassword(authEmail.value, authPwd.value); }catch(e){ authState.textContent = e.message; } }
-    async function signIn(){ try{ await auth.signInWithEmailAndPassword(authEmail.value, authPwd.value); closeAuth(); }catch(e){ authState.textContent = e.message; } }
-    async function signOut(){ try{ await auth.signOut(); }catch(e){ authState.textContent = e.message; } }
-    btnSignUp.addEventListener('click', signUp);
-    btnSignIn.addEventListener('click', signIn);
-    btnSignOut.addEventListener('click', signOut);
-
-    // Cloud sync
-    function userDoc(){ return db.collection('users').doc(user.uid); }
-    async function loadCloud(){ const snap = await userDoc().get(); return snap.exists ? snap.data() : null; }
-    async function saveCloud(payload){ if(!user) return; payload = payload || saveLocal(); payload.email = user.email; payload.updatedAt = nowTs(); await userDoc().set(payload, { merge:true }); }
-    async function mergeCloudLocal(){
-      const local = loadLocal(); const cloud = await loadCloud();
-      if(cloud && (!local || (cloud.updatedAt||0) >= (local.updatedAt||0))){ applyProgress(cloud); saveLocal(); }
-      else if(local){ applyProgress(local); await saveCloud(local); }
-      else { await saveCloud(saveLocal()); }
-      refreshProfile();
-    }
-    function saveCloudIfAny(payload){ if(user && navigator.onLine){ saveCloud(payload).catch(()=>{}); } }
-
+   
     // PWA
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(console.error); });
